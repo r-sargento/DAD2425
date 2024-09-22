@@ -1,6 +1,8 @@
 package dadkvs.server;
 
 import io.grpc.BindableService;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 
@@ -14,6 +16,9 @@ public class DadkvsServer {
 	/** Server host port. */
 	private static int port;
 
+	static ManagedChannel[] channels;
+	static DadkvsMainServiceGrpc.DadkvsMainServiceStub[] async_stubs;
+	
 	public static void main(String[] args) throws Exception {
 		final int kvsize = 1000;
 
@@ -38,8 +43,13 @@ public class DadkvsServer {
 		server_state = new DadkvsServerState(kvsize, base_port, my_id);
 
 		port = base_port + my_id;
+		
+		if(my_id == 0){
+			initServerStubs();
+			server_state.i_am_leader = true;
+		}
 
-		final BindableService service_impl = new DadkvsMainServiceImpl(server_state);
+		final BindableService service_impl = new DadkvsMainServiceImpl(server_state, async_stubs);
 		final BindableService console_impl = new DadkvsConsoleServiceImpl(server_state);
 		final BindableService paxos_impl = new DadkvsPaxosServiceImpl(server_state);
 
@@ -54,4 +64,29 @@ public class DadkvsServer {
 		// Do not exit the main thread. Wait until server is terminated.
 		server.awaitTermination();
 	}
+
+	private static void initServerStubs() {
+		// Let us use plaintext communication because we do not have certificates
+		channels = new ManagedChannel[4];
+
+		for (int i = 0; i < 4; i++) {
+			int aux = 8081 + i;
+			channels[i] = ManagedChannelBuilder.forTarget("localhost:" + aux).usePlaintext().build();
+		}
+
+		async_stubs = new DadkvsMainServiceGrpc.DadkvsMainServiceStub[4];
+
+		for (int i = 0; i < 4; i++) {
+			async_stubs[i] = DadkvsMainServiceGrpc.newStub(channels[i]);
+		}
+	}
+
+	private static void terminateServerStubs() {
+		for (int i = 0; i < 4; i++) {
+			channels[i].shutdownNow();
+		}
+	}
+
 }
+
+

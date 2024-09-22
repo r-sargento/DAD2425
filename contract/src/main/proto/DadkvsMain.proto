@@ -30,8 +30,18 @@ message CommitReply {
   bool  ack     = 2;
 }
 
+message LeaderRequest{
+  int32 reqid = 1;
+  int32 seqnumber = 2;
+}
+
+message LeaderResponse{
+}
+
+
 service DadkvsMainService {
   rpc read (ReadRequest) returns (ReadReply);
   rpc committx (CommitRequest) returns (CommitReply);
+  rpc leaderSequence (LeaderRequest) returns (LeaderResponse);
 }
 
