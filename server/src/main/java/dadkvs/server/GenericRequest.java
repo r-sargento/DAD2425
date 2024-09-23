@@ -7,6 +7,15 @@ public class GenericRequest {
     private DadkvsMain.ReadRequest read_request = null;
     private DadkvsMain.CommitRequest commit_request = null;
     private StreamObserver<DadkvsMain.ReadReply> responseObserver = null;
+    private StreamObserver<DadkvsMain.CommitReply> Commit_responseObserver = null;
+
+    public StreamObserver<DadkvsMain.CommitReply> getCommit_responseObserver() {
+        return Commit_responseObserver;
+    }
+
+    public void setCommit_responseObserver(StreamObserver<DadkvsMain.CommitReply> commit_responseObserver) {
+        Commit_responseObserver = commit_responseObserver;
+    }
 
     public StreamObserver<DadkvsMain.ReadReply> getResponseObserver() {
         return responseObserver;
@@ -42,5 +51,9 @@ public class GenericRequest {
     
     public void setCommit_request(DadkvsMain.CommitRequest commit_request) {
         this.commit_request = commit_request;
+    }
+
+    public boolean isRead (){
+        return read_request == null ? false : true;
     }
 }
