@@ -7,7 +7,9 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 
 import dadkvs.DadkvsMain;
+import dadkvs.DadkvsPaxos;
 import dadkvs.DadkvsMainServiceGrpc;
+import dadkvs.DadkvsPaxosServiceGrpc;
 
 public class DadkvsServer {
 
@@ -17,7 +19,7 @@ public class DadkvsServer {
 	private static int port;
 
 	static ManagedChannel[] channels;
-	static DadkvsMainServiceGrpc.DadkvsMainServiceStub[] async_stubs;
+	static DadkvsPaxosServiceGrpc.DadkvsPaxosServiceStub[] async_paxos_stubs;
 	
 	public static void main(String[] args) throws Exception {
 		final int kvsize = 1000;
@@ -49,9 +51,9 @@ public class DadkvsServer {
 			server_state.i_am_leader = true;
 		}
 
-		final BindableService service_impl = new DadkvsMainServiceImpl(server_state, async_stubs);
+		final BindableService service_impl = new DadkvsMainServiceImpl(server_state, async_paxos_stubs);
 		final BindableService console_impl = new DadkvsConsoleServiceImpl(server_state);
-		final BindableService paxos_impl = new DadkvsPaxosServiceImpl(server_state);
+		final BindableService paxos_impl = new DadkvsPaxosServiceImpl(server_state, async_paxos_stubs);
 
 		// Create a new server to listen on port.
 		Server server = ServerBuilder.forPort(port).addService(service_impl).addService(console_impl)
@@ -67,22 +69,23 @@ public class DadkvsServer {
 
 	private static void initServerStubs() {
 		// Let us use plaintext communication because we do not have certificates
-		channels = new ManagedChannel[4];
+		channels = new ManagedChannel[5];
 
-		for (int i = 0; i < 4; i++) {
-			int aux = 8081 + i;
+		for (int i = 0; i < 5; i++) {
+			int aux = 8080 + i;
 			channels[i] = ManagedChannelBuilder.forTarget("localhost:" + aux).usePlaintext().build();
 		}
 
-		async_stubs = new DadkvsMainServiceGrpc.DadkvsMainServiceStub[4];
+		
+		async_paxos_stubs = new DadkvsPaxosServiceGrpc.DadkvsPaxosServiceStub[5];
 
-		for (int i = 0; i < 4; i++) {
-			async_stubs[i] = DadkvsMainServiceGrpc.newStub(channels[i]);
+		for (int i = 0; i < 5; i++) {
+			async_paxos_stubs[i] = DadkvsPaxosServiceGrpc.newStub(channels[i]);
 		}
 	}
 
 	private static void terminateServerStubs() {
-		for (int i = 0; i < 4; i++) {
+		for (int i = 0; i < 5; i++) {
 			channels[i].shutdownNow();
 		}
 	}

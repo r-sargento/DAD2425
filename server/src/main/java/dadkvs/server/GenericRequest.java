@@ -9,51 +9,32 @@ public class GenericRequest {
     private StreamObserver<DadkvsMain.ReadReply> responseObserver = null;
     private StreamObserver<DadkvsMain.CommitReply> Commit_responseObserver = null;
 
-    public StreamObserver<DadkvsMain.CommitReply> getCommit_responseObserver() {
-        return Commit_responseObserver;
+    public GenericRequest(DadkvsMain.ReadRequest request, StreamObserver<DadkvsMain.ReadReply> responseObserver) {
+        is_read = true;
+        this.read_request = request;
+        this.responseObserver = responseObserver;
     }
 
-    public void setCommit_responseObserver(StreamObserver<DadkvsMain.CommitReply> commit_responseObserver) {
-        Commit_responseObserver = commit_responseObserver;
+    public GenericRequest(DadkvsMain.CommitRequest request, StreamObserver<DadkvsMain.CommitReply> responseObserver) {
+        is_read = false;
+        this.commit_request = request;
+        this.Commit_responseObserver = responseObserver;
+    }
+
+    public StreamObserver<DadkvsMain.CommitReply> getCommit_responseObserver() {
+        return Commit_responseObserver;
     }
 
     public StreamObserver<DadkvsMain.ReadReply> getResponseObserver() {
         return responseObserver;
     }
 
-    public void setResponseObserver(StreamObserver<DadkvsMain.ReadReply> responseObserver) {
-        this.responseObserver = responseObserver;
-    }
-
-    GenericRequest(){
-        is_read = false;
-    }
-
-    public boolean isIs_read() {
-        return is_read;
-    }
-
-    public void setIs_read(boolean is_read) {
-        this.is_read = is_read;
-    }
-
     public DadkvsMain.ReadRequest getRead_request() {
         return read_request;
-    }
-
-    public void setRead_request(DadkvsMain.ReadRequest read_request) {
-        this.read_request = read_request;
     }
 
     public DadkvsMain.CommitRequest getCommit_request() {
         return commit_request;
     }
-    
-    public void setCommit_request(DadkvsMain.CommitRequest commit_request) {
-        this.commit_request = commit_request;
-    }
 
-    public boolean isRead (){
-        return read_request == null ? false : true;
-    }
 }
