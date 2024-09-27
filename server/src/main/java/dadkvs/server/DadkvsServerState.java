@@ -20,7 +20,6 @@ public class DadkvsServerState {
     private ConcurrentHashMap<Integer, GenericRequest> requestMap = new ConcurrentHashMap<>();
     private static final AtomicInteger REQUEST_COUNTER = new AtomicInteger(0);
     private AtomicInteger currentPaxosInstance;
-    private ConcurrentHashMap<Integer, PaxosInstance> paxosInstances;
 
     public DadkvsServerState(int kv_size, int port, int myself) {
         base_port = port;
@@ -34,7 +33,6 @@ public class DadkvsServerState {
         main_loop_worker.start();
         requests = new ArrayList<>();
         currentPaxosInstance = new AtomicInteger(0);
-        paxosInstances = new ConcurrentHashMap<>();
     }
 
     public synchronized void addRequest(GenericRequest request) {
