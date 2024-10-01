@@ -149,50 +149,67 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
     public void startPaxosInstance(int index, int value) {
         int currentTimestamp = timestamp.incrementAndGet();
         PhaseOneRequest request = PhaseOneRequest.newBuilder()
-            .setPhase1Config(server_state.my_id)
+            .setPhase1Config(0)
             .setPhase1Index(index)
             .setPhase1Timestamp(currentTimestamp)
             .build();
         
         
         ArrayList<PhaseOneReply> replies = new ArrayList<>();
-        GenericResponseCollector<PhaseOneReply> collector = new GenericResponseCollector<>(replies, 5);
-        // Send Phase 1 messages to all replicas
-        for (int i = 0; i < 5; i++){
+        GenericResponseCollector<PhaseOneReply> collector = new GenericResponseCollector<>(replies, 3);
+        // Send Phase 1 messages to all acceptors in config
+        for (int i = 0; i < 3; i++){
             async_paxos_stubs[i].phaseone(request, new CollectorStreamObserver<PhaseOneReply>(collector));
         }
-        collector.waitForTarget(3);
+        collector.waitForTarget(2); //wait for majority of replies in acceptors
 
         //iterate over replies and pick value
+        int lastRecentValueTimestamp = -1;
         for (PhaseOneReply reply : replies) {
             if (reply.getPhase1Accepted()) {
                 //check if value return is more recent than mine
-                if (reply.getPhase1Timestamp() > currentTimestamp) {
-                    currentTimestamp = reply.getPhase1Timestamp();
+                if (reply.getPhase1Value() != -1 && reply.getPhase1Timestamp() > lastRecentValueTimestamp) {
                     //update value
+                    lastRecentValueTimestamp = reply.getPhase1Timestamp();
                     value = reply.getPhase1Value();
+                    startPaxosInstance(index+1, value); // go try to do paxos for next slot
+                    //return here??? maybe not to be able to finish current paxos
                 }
+            }else{
+                //if not accepted, start new instance
+                timestamp.addAndGet(5); //increment timestamp by num of servers
+                startPaxosInstance(index, value);
+                return;
             }
         }
         
-        // Send Phase 2 messages to all replicas
+        // Send Phase 2 messages to all acceptors
         PhaseTwoRequest phaseTwoRequest = PhaseTwoRequest.newBuilder()
-            .setPhase2Config(server_state.my_id)
+            .setPhase2Config(0)
             .setPhase2Index(index)
             .setPhase2Value(value)
             .setPhase2Timestamp(currentTimestamp)
             .build();
 
         ArrayList<PhaseTwoReply> phaseTwoReplies = new ArrayList<>();
-        GenericResponseCollector<PhaseTwoReply> phaseTwoCollector = new GenericResponseCollector<>(phaseTwoReplies, 5);
-        for (int i = 0; i < 5; i++){
+        GenericResponseCollector<PhaseTwoReply> phaseTwoCollector = new GenericResponseCollector<>(phaseTwoReplies, 3);
+        for (int i = 0; i < 3; i++){
             async_paxos_stubs[i].phasetwo(phaseTwoRequest, new CollectorStreamObserver<PhaseTwoReply>(phaseTwoCollector));
         }
-        phaseTwoCollector.waitForTarget(3);
+        phaseTwoCollector.waitForTarget(2);
+
+        for (PhaseTwoReply reply : phaseTwoReplies) {
+            if (!reply.getPhase2Accepted()) {
+                //if not accepted, start new instance
+                timestamp.addAndGet(5); //increment timestamp by num of servers
+                startPaxosInstance(index, value);
+                return;
+            }
+        }
 
         //Send learn message to all replicas
         DadkvsPaxos.LearnRequest learnRequest = DadkvsPaxos.LearnRequest.newBuilder()
-            .setLearnconfig(server_state.my_id)
+            .setLearnconfig(0)
             .setLearnindex(index)
             .setLearnvalue(value)
             .setLearntimestamp(currentTimestamp)
