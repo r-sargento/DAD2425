@@ -3,6 +3,8 @@ package dadkvs.server;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.Random;
 
 import dadkvs.DadkvsMain;
 import io.grpc.stub.StreamObserver;
@@ -18,8 +20,10 @@ public class DadkvsServerState {
     Thread main_loop_worker;
     private ArrayList<GenericRequest> requests;
     private ConcurrentHashMap<Integer, GenericRequest> requestMap = new ConcurrentHashMap<>();
-    private static final AtomicInteger REQUEST_COUNTER = new AtomicInteger(0);
     private AtomicInteger currentPaxosInstance;
+
+    private boolean isFrozen = false;
+    private boolean isSlowMode = false;
 
     public DadkvsServerState(int kv_size, int port, int myself) {
         base_port = port;
@@ -35,8 +39,40 @@ public class DadkvsServerState {
         currentPaxosInstance = new AtomicInteger(0);
     }
 
+    public synchronized void setFreezeLock(boolean state){
+        this.isFrozen = state;
+    }
+
+    public synchronized void setSlowMode(boolean state){
+        this.isSlowMode = state;
+        return;
+    }
+
+    public boolean isFrozen() {
+        // Check if the server is frozen
+        if (isFrozen) {
+            System.out.println("Server is frozen, blocking client request.");
+        }
+        return isFrozen;    
+    }
+
+    public boolean checkAndRunSlowMode(){
+        // Apply slow mode if it's on
+        if (isSlowMode) {
+            try {
+                Random random = new Random();
+                int delay = random.nextInt(3000);  // Apply a delay between 0 to 3000 milliseconds
+                System.out.println("Slow mode is on, delaying request by " + delay + " ms.");
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+		return isSlowMode;
+    }
+
     public synchronized void addRequest(GenericRequest request) {
-        int serializedValue = serializeRequest(request);
+        int serializedValue = serializeRequest(request, request.getReqid());
         requests.add(request);
         requestMap.put(serializedValue, request);
     }
@@ -50,7 +86,7 @@ public class DadkvsServerState {
     }
 
     public void executeDecidedValue(int index, int value) {
-
+        
         System.out.println("Executing decided value for instance " + index);
             
         // Find the corresponding request
@@ -114,12 +150,11 @@ public class DadkvsServerState {
         responseObserver.onCompleted();
     }
 
-    private int serializeRequest(GenericRequest request) {
+    private int serializeRequest(GenericRequest request, int reqid) {
         int requestType = request.getRead_request() != null ? 0 : 1; // 0 for read, 1 for commit
-        int requestId = REQUEST_COUNTER.getAndIncrement();
 
         // Combine request type and ID into a single integer
         // Use the first bit for request type, and the remaining 31 bits for the ID
-        return (requestType << 31) | requestId;
+        return (requestType << 31) | reqid;
     }
 }

@@ -3,17 +3,14 @@ package dadkvs.server;
 import dadkvs.DadkvsMain;
 import dadkvs.DadkvsMainServiceGrpc;
 import dadkvs.DadkvsPaxosServiceGrpc;
-import dadkvs.util.LeaderResponseObserver;
 import io.grpc.stub.StreamObserver;
 import io.grpc.Context;
 
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServiceImplBase {
 
 	DadkvsServerState server_state;
 	DadkvsPaxosServiceImpl paxosService;
-	private static final AtomicInteger REQUEST_COUNTER = new AtomicInteger(0);
 
 	public DadkvsMainServiceImpl(DadkvsServerState state, DadkvsPaxosServiceGrpc.DadkvsPaxosServiceStub[] async_paxos_stubs) {
 		this.server_state = state;
@@ -22,26 +19,34 @@ public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServi
 
 	@Override
 	public void read(DadkvsMain.ReadRequest request, StreamObserver<DadkvsMain.ReadReply> responseObserver) {
+
+		if(this.server_state.isFrozen()) return;
+		this.server_state.checkAndRunSlowMode();
+
 		System.out.println("Receiving read request:" + request);
 
 		GenericRequest genericRequest = new GenericRequest(request, responseObserver);
 		server_state.addRequest(genericRequest);
 
 		int paxosInstanceId = server_state.getNextPaxosInstance();
-		int value = serializeRequest(genericRequest);
+		int value = serializeRequest(genericRequest,request.getReqid());
 
 		runPaxos(paxosInstanceId, value);
 	}
 
 	@Override
 	public void committx(DadkvsMain.CommitRequest request, StreamObserver<DadkvsMain.CommitReply> responseObserver) {
+
+		if(this.server_state.isFrozen()) return;
+		this.server_state.checkAndRunSlowMode();
+
 		System.out.println("Receiving commit request:" + request);
 
 		GenericRequest genericRequest = new GenericRequest(request, responseObserver);
 		server_state.addRequest(genericRequest);
 
 		int paxosInstanceId = server_state.getNextPaxosInstance();
-		int value = serializeRequest(genericRequest);
+		int value = serializeRequest(genericRequest,request.getReqid());
 
 		runPaxos(paxosInstanceId, value);
 	}
@@ -55,12 +60,11 @@ public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServi
 		}
 	}
 
-	private int serializeRequest(GenericRequest request) {
+	private int serializeRequest(GenericRequest request, int reqid) {
 		int requestType = request.getRead_request() != null ? 0 : 1; // 0 for read, 1 for commit
-		int requestId = REQUEST_COUNTER.getAndIncrement();
 
 		// Combine request type and ID into a single integer
 		// Use the first bit for request type, and the remaining 31 bits for the ID
-		return (requestType << 31) | requestId;
+		return (requestType << 31) | reqid;
 	}
 }

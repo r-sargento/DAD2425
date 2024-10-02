@@ -8,17 +8,20 @@ public class GenericRequest {
     private DadkvsMain.CommitRequest commit_request = null;
     private StreamObserver<DadkvsMain.ReadReply> responseObserver = null;
     private StreamObserver<DadkvsMain.CommitReply> Commit_responseObserver = null;
+    private int reqid = -1;
 
     public GenericRequest(DadkvsMain.ReadRequest request, StreamObserver<DadkvsMain.ReadReply> responseObserver) {
         is_read = true;
         this.read_request = request;
         this.responseObserver = responseObserver;
+        this.reqid = request.getReqid();
     }
 
     public GenericRequest(DadkvsMain.CommitRequest request, StreamObserver<DadkvsMain.CommitReply> responseObserver) {
         is_read = false;
         this.commit_request = request;
         this.Commit_responseObserver = responseObserver;
+        this.reqid = request.getReqid();
     }
 
     public StreamObserver<DadkvsMain.CommitReply> getCommit_responseObserver() {
@@ -37,4 +40,7 @@ public class GenericRequest {
         return commit_request;
     }
 
+    public int getReqid(){
+        return reqid;
+    }
 }

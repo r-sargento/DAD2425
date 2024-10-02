@@ -17,6 +17,7 @@ import dadkvs.DadkvsPaxos.PhaseTwoRequest;
 import dadkvs.DadkvsPaxosServiceGrpc;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Random;
 
 import com.google.common.collect.ArrayListMultimap;
 
@@ -38,7 +39,7 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
 
     public DadkvsPaxosServiceImpl(DadkvsServerState state, DadkvsPaxosServiceGrpc.DadkvsPaxosServiceStub[] async_paxos_stubs) {
         this.server_state = state;
-        this.timestamp = new AtomicInteger(0);
+        this.timestamp = new AtomicInteger(server_state.my_id);
         this.paxosInstances = new ConcurrentHashMap<>();
         this.async_paxos_stubs = async_paxos_stubs;
     }
@@ -46,6 +47,9 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
     @Override
     public void phaseone(DadkvsPaxos.PhaseOneRequest request,
             StreamObserver<DadkvsPaxos.PhaseOneReply> responseObserver) {
+
+        this.server_state.checkAndRunSlowMode();
+
         // for debug purposes
         System.out.println("Receive phase1 request: " + request);
 
@@ -81,6 +85,9 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
     @Override
     public void phasetwo(DadkvsPaxos.PhaseTwoRequest request,
             StreamObserver<DadkvsPaxos.PhaseTwoReply> responseObserver) {
+
+        this.server_state.checkAndRunSlowMode();
+
         // for debug purposes
         System.out.println("Receive phase two request: " + request);
 
@@ -115,6 +122,9 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
 
     @Override
     public void learn(DadkvsPaxos.LearnRequest request, StreamObserver<DadkvsPaxos.LearnReply> responseObserver) {
+        
+        this.server_state.checkAndRunSlowMode();
+        
         // for debug purposes
         System.out.println("Receive learn request: " + request);
 
@@ -123,7 +133,7 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
         int value = request.getLearnvalue();
         int learnTimestamp = request.getLearntimestamp();
 
-        PaxosInstance instance = paxosInstances.get(index);
+        PaxosInstance instance = paxosInstances.computeIfAbsent(index, k -> new PaxosInstance());
         instance.setDecidedValue(value);
         instance.setDecidedTimestamp(learnTimestamp);
 
@@ -147,7 +157,7 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
     }
 
     public void startPaxosInstance(int index, int value) {
-        int currentTimestamp = timestamp.incrementAndGet();
+        int currentTimestamp = timestamp.getAndAdd(3);
         PhaseOneRequest request = PhaseOneRequest.newBuilder()
             .setPhase1Config(0)
             .setPhase1Index(index)
@@ -177,7 +187,15 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
                 }
             }else{
                 //if not accepted, start new instance
-                timestamp.addAndGet(5); //increment timestamp by num of servers
+                timestamp.addAndGet(3); //increment timestamp by num of servers
+                Random random = new Random();
+                int randomSleepTime = random.nextInt(3000);
+                try {
+                    // Sleep for the random duration
+                    Thread.sleep(randomSleepTime);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
                 startPaxosInstance(index, value);
                 return;
             }
@@ -201,7 +219,15 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
         for (PhaseTwoReply reply : phaseTwoReplies) {
             if (!reply.getPhase2Accepted()) {
                 //if not accepted, start new instance
-                timestamp.addAndGet(5); //increment timestamp by num of servers
+                timestamp.addAndGet(3); //increment timestamp by num of servers
+                Random random = new Random();
+                int randomSleepTime = random.nextInt(3000);
+                try {
+                    // Sleep for the random duration
+                    Thread.sleep(randomSleepTime);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
                 startPaxosInstance(index, value);
                 return;
             }

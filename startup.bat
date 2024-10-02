@@ -1,6 +1,6 @@
 @echo off
-set SERVER_DIR=/mnt/c/Users/marqu/Desktop/DAD2425/server
-set CLIENT_DIR=/mnt/c/Users/marqu/Desktop/DAD2425/client
+set SERVER_DIR=server
+set CLIENT_DIR=client
 
 :: Launching the server instances with a 2-second delay between each
 start cmd /k wsl bash -c "cd %SERVER_DIR% && mvn exec:java -Dexec.args=\"8080 0\""
