@@ -18,8 +18,11 @@ public class DadkvsServerState {
     KeyValueStore store;
     MainLoop main_loop;
     Thread main_loop_worker;
+    int lastExecutedIndex;
+    
     private ArrayList<GenericRequest> requests;
     private ConcurrentHashMap<Integer, GenericRequest> requestMap = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<Integer, Integer> orderMap = new ConcurrentHashMap<>();  // <Integer, Integer> ---> <Value, Index>
     private AtomicInteger currentPaxosInstance;
 
     private boolean isFrozen = false;
@@ -37,6 +40,7 @@ public class DadkvsServerState {
         main_loop_worker.start();
         requests = new ArrayList<>();
         currentPaxosInstance = new AtomicInteger(0);
+        lastExecutedIndex = -1;
     }
 
     public synchronized void setFreezeLock(boolean state){
@@ -75,6 +79,10 @@ public class DadkvsServerState {
         int serializedValue = serializeRequest(request, request.getReqid());
         requests.add(request);
         requestMap.put(serializedValue, request);
+
+        if (orderMap.get(serializedValue) != null){ // caso em que o paxos ja acabou
+            executeDecidedValue(orderMap.get(serializedValue),serializedValue);
+        }
     }
 
     public synchronized ArrayList<GenericRequest> getRequests() {
@@ -99,10 +107,13 @@ public class DadkvsServerState {
                 System.out.println("Executing commit request for instance " + index);
                 executeCommitRequest(request.getCommit_request(), request.getCommit_responseObserver());
             }
+            lastExecutedIndex +=1;
             requests.remove(request);
         }else {
+            //caso em que ainda nao recebeu o pedido do cliente
             //for debug purposes
             System.out.println("Request not found for instance " + index);
+            orderMap.put(value, index);
         }
 
     }

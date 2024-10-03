@@ -18,7 +18,7 @@ import dadkvs.DadkvsPaxosServiceGrpc;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Random;
-
+import io.grpc.Context;
 import com.google.common.collect.ArrayListMultimap;
 
 import dadkvs.util.GenericResponseCollector;
@@ -36,11 +36,13 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
     //for concurrent acess
     private AtomicInteger timestamp;
     private ConcurrentHashMap<Integer, PaxosInstance> paxosInstances;
+    private ConcurrentHashMap<Integer, Integer> learnReceived; // relacao de quantos learns recebemos para um dado value (request)
 
     public DadkvsPaxosServiceImpl(DadkvsServerState state, DadkvsPaxosServiceGrpc.DadkvsPaxosServiceStub[] async_paxos_stubs) {
         this.server_state = state;
         this.timestamp = new AtomicInteger(server_state.my_id);
         this.paxosInstances = new ConcurrentHashMap<>();
+        this.learnReceived = new ConcurrentHashMap<>();
         this.async_paxos_stubs = async_paxos_stubs;
     }
 
@@ -108,19 +110,24 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
                 .setPhase2Accepted(true)
                 .build();
 
-            //Send learn message to all replicas
-            DadkvsPaxos.LearnRequest learnRequest = DadkvsPaxos.LearnRequest.newBuilder()
-                .setLearnconfig(0)
-                .setLearnindex(index)
-                .setLearnvalue(value)
-                .setLearntimestamp(timestamp.get())
-                .build();
+            Context ctx = Context.current().fork();
+			ctx.run(() -> {
+                //Send learn message to all replicas
+                DadkvsPaxos.LearnRequest learnRequest = DadkvsPaxos.LearnRequest.newBuilder()
+                    .setLearnconfig(0)
+                    .setLearnindex(index)
+                    .setLearnvalue(value)
+                    .setLearntimestamp(timestamp.get())
+                    .build();
 
-            ArrayList<LearnReply> learnReplies = new ArrayList<>();
-            GenericResponseCollector<LearnReply> learnCollector = new GenericResponseCollector<>(learnReplies, 5);
-            for (int i = 0; i < 5; i++){
-                async_paxos_stubs[i].learn(learnRequest, new CollectorStreamObserver<LearnReply>(learnCollector));
-            }
+                ArrayList<LearnReply> learnReplies = new ArrayList<>();
+                GenericResponseCollector<LearnReply> learnCollector = new GenericResponseCollector<>(learnReplies, 5);
+                for (int i = 0; i < 5; i++){
+                    async_paxos_stubs[i].learn(learnRequest, new CollectorStreamObserver<LearnReply>(learnCollector));
+                }
+			});
+            
+            
 
         } else {
             reply = PhaseTwoReply.newBuilder()
@@ -152,9 +159,21 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
         instance.setDecidedValue(value);
         instance.setDecidedTimestamp(learnTimestamp);
 
+        int receivedLearns = learnReceived.computeIfAbsent(value, k -> new Integer(0));
+        receivedLearns +=1;
+        learnReceived.put(value, receivedLearns);
+
         // Execute the decided value (request)
         System.out.println("Executing request for instance " + index);
-        executeRequest(index, value);
+
+        if (server_state.lastExecutedIndex +1 == index  && receivedLearns >=2){
+            executeRequest(index, value);
+        }else {
+            //for debug
+            System.out.println("Failed to executed because lastExecuted: " + server_state.lastExecutedIndex + " and received Learns was " + receivedLearns);
+        }
+
+        
 
         LearnReply reply = LearnReply.newBuilder()
             .setLearnconfig(config)
