@@ -6,6 +6,9 @@ import dadkvs.DadkvsPaxosServiceGrpc;
 import io.grpc.stub.StreamObserver;
 import io.grpc.Context;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+
 
 public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServiceImplBase {
 
@@ -20,35 +23,50 @@ public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServi
 	@Override
 	public void read(DadkvsMain.ReadRequest request, StreamObserver<DadkvsMain.ReadReply> responseObserver) {
 
-		if(this.server_state.isFrozen()) return;
 		this.server_state.checkAndRunSlowMode();
 
 		System.out.println("Receiving read request:" + request);
 
 		GenericRequest genericRequest = new GenericRequest(request, responseObserver);
-		server_state.addRequest(genericRequest);
 
-		int paxosInstanceId = server_state.getNextPaxosInstance();
-		int value = serializeRequest(genericRequest,request.getReqid());
+		if(this.server_state.isFrozen()){
 
-		runPaxos(paxosInstanceId, value);
+			server_state.addFrozenRequest(genericRequest);
+
+		}else{
+			if(!server_state.getFrozenRequests().isEmpty()) processFrozenRequests();
+			server_state.addRequest(genericRequest);
+
+			int paxosInstanceId = server_state.getNextPaxosInstance();
+			int value = serializeRequest(genericRequest,request.getReqid());
+	
+			runPaxos(paxosInstanceId, value);
+		}
 	}
 
 	@Override
 	public void committx(DadkvsMain.CommitRequest request, StreamObserver<DadkvsMain.CommitReply> responseObserver) {
 
-		if(this.server_state.isFrozen()) return;
 		this.server_state.checkAndRunSlowMode();
 
 		System.out.println("Receiving commit request:" + request);
 
 		GenericRequest genericRequest = new GenericRequest(request, responseObserver);
-		server_state.addRequest(genericRequest);
 
-		int paxosInstanceId = server_state.getNextPaxosInstance();
-		int value = serializeRequest(genericRequest,request.getReqid());
+		if(this.server_state.isFrozen()){
 
-		runPaxos(paxosInstanceId, value);
+			server_state.addFrozenRequest(genericRequest);
+
+		}else{
+			if(!server_state.getFrozenRequests().isEmpty()) processFrozenRequests();
+			server_state.addRequest(genericRequest);
+
+			int paxosInstanceId = server_state.getNextPaxosInstance();
+			int value = serializeRequest(genericRequest,request.getReqid());
+	
+			runPaxos(paxosInstanceId, value);
+		}
+
 	}
 
 	private void runPaxos (int paxosInstanceId, int value) {
@@ -66,5 +84,33 @@ public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServi
 		// Combine request type and ID into a single integer
 		// Use the first bit for request type, and the remaining 31 bits for the ID
 		return (requestType << 31) | reqid;
+	}
+
+	private synchronized void processFrozenRequests(){
+		ArrayList<GenericRequest> frozenRequests = new ArrayList<>(server_state.getFrozenRequests());
+
+		Iterator<GenericRequest> iterator = frozenRequests.iterator();
+
+		while (iterator.hasNext()) {
+			GenericRequest request = iterator.next();
+
+			server_state.addRequest(request);
+
+			int paxosInstanceId = server_state.getNextPaxosInstance();
+			int value = 0;
+			if(request.getCommit_request() == null){
+				value = serializeRequest(request,request.getRead_request().getReqid());
+			}
+			else{
+				value = serializeRequest(request,request.getCommit_request().getReqid());
+			}
+	
+			runPaxos(paxosInstanceId, value);
+
+			iterator.remove();
+
+		}
+
+		server_state.setFrozenRequests(frozenRequests);
 	}
 }

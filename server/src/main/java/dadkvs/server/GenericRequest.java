@@ -43,4 +43,5 @@ public class GenericRequest {
     public int getReqid(){
         return reqid;
     }
+
 }

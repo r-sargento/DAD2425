@@ -21,6 +21,8 @@ public class DadkvsServerState {
     int lastExecutedIndex;
     
     private ArrayList<GenericRequest> requests;
+    private ArrayList<GenericRequest> frozenRequests;
+
     private ConcurrentHashMap<Integer, GenericRequest> requestMap = new ConcurrentHashMap<>();
     private ConcurrentHashMap<Integer, Integer> orderMap = new ConcurrentHashMap<>();  // <Integer, Integer> ---> <Value, Index>
     private AtomicInteger currentPaxosInstance;
@@ -41,6 +43,19 @@ public class DadkvsServerState {
         requests = new ArrayList<>();
         currentPaxosInstance = new AtomicInteger(0);
         lastExecutedIndex = -1;
+        frozenRequests = new ArrayList<>();
+    }
+
+    public synchronized ArrayList<GenericRequest> getFrozenRequests() {
+        return frozenRequests;
+    }
+
+    public synchronized void setFrozenRequests(ArrayList<GenericRequest> frozenRequests) {
+        this.frozenRequests = frozenRequests;
+    }
+
+    public synchronized void addFrozenRequest(GenericRequest request){
+        frozenRequests.add(request);
     }
 
     public synchronized void setFreezeLock(boolean state){
