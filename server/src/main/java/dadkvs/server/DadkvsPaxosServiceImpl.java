@@ -107,6 +107,21 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
                 .setPhase2Index(index)
                 .setPhase2Accepted(true)
                 .build();
+
+            //Send learn message to all replicas
+            DadkvsPaxos.LearnRequest learnRequest = DadkvsPaxos.LearnRequest.newBuilder()
+                .setLearnconfig(0)
+                .setLearnindex(index)
+                .setLearnvalue(value)
+                .setLearntimestamp(timestamp.get())
+                .build();
+
+            ArrayList<LearnReply> learnReplies = new ArrayList<>();
+            GenericResponseCollector<LearnReply> learnCollector = new GenericResponseCollector<>(learnReplies, 5);
+            for (int i = 0; i < 5; i++){
+                async_paxos_stubs[i].learn(learnRequest, new CollectorStreamObserver<LearnReply>(learnCollector));
+            }
+
         } else {
             reply = PhaseTwoReply.newBuilder()
                 .setPhase2Config(config)
@@ -157,7 +172,7 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
     }
 
     public void startPaxosInstance(int index, int value) {
-        int currentTimestamp = timestamp.getAndAdd(3);
+        int currentTimestamp = timestamp.get();
         PhaseOneRequest request = PhaseOneRequest.newBuilder()
             .setPhase1Config(0)
             .setPhase1Index(index)
@@ -175,28 +190,24 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
 
         //iterate over replies and pick value
         int lastRecentValueTimestamp = -1;
+        boolean valueNotAccepted = false;
+        int oldValue = 0;
         for (PhaseOneReply reply : replies) {
             if (reply.getPhase1Accepted()) {
                 //check if value return is more recent than mine
                 if (reply.getPhase1Value() != -1 && reply.getPhase1Timestamp() > lastRecentValueTimestamp) {
                     //update value
                     lastRecentValueTimestamp = reply.getPhase1Timestamp();
-                    startPaxosInstance(index+1, value); // go try to do paxos for next slot
+                    valueNotAccepted = true;
+                    oldValue = value;
                     value = reply.getPhase1Value();
-                    //return here??? maybe not to be able to finish current paxos
                 }
             }else{
                 //if not accepted, start new instance
-                timestamp.addAndGet(3); //increment timestamp by num of servers
-                Random random = new Random();
-                int randomSleepTime = random.nextInt(3000);
-                try {
-                    // Sleep for the random duration
-                    Thread.sleep(randomSleepTime);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                if(server_state.i_am_leader){
+                    timestamp.addAndGet(3); //increment timestamp by num of servers
+                    startPaxosInstance(index, value);
                 }
-                startPaxosInstance(index, value);
                 return;
             }
         }
@@ -219,34 +230,15 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
         for (PhaseTwoReply reply : phaseTwoReplies) {
             if (!reply.getPhase2Accepted()) {
                 //if not accepted, start new instance
-                timestamp.addAndGet(3); //increment timestamp by num of servers
-                Random random = new Random();
-                int randomSleepTime = random.nextInt(3000);
-                try {
-                    // Sleep for the random duration
-                    Thread.sleep(randomSleepTime);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                if(server_state.i_am_leader){
+                    timestamp.addAndGet(3); //increment timestamp by num of servers
+                    startPaxosInstance(index, value);
                 }
-                startPaxosInstance(index, value);
                 return;
             }
         }
 
-        //Send learn message to all replicas
-        DadkvsPaxos.LearnRequest learnRequest = DadkvsPaxos.LearnRequest.newBuilder()
-            .setLearnconfig(0)
-            .setLearnindex(index)
-            .setLearnvalue(value)
-            .setLearntimestamp(currentTimestamp)
-            .build();
-
-        ArrayList<LearnReply> learnReplies = new ArrayList<>();
-        GenericResponseCollector<LearnReply> learnCollector = new GenericResponseCollector<>(learnReplies, 5);
-        for (int i = 0; i < 5; i++){
-            async_paxos_stubs[i].learn(learnRequest, new CollectorStreamObserver<LearnReply>(learnCollector));
-        }
-        learnCollector.waitForTarget(3);
+        if(valueNotAccepted) startPaxosInstance(index+1, oldValue); 
 
     }
 
