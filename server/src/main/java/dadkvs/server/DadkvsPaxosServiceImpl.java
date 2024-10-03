@@ -181,8 +181,8 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
                 if (reply.getPhase1Value() != -1 && reply.getPhase1Timestamp() > lastRecentValueTimestamp) {
                     //update value
                     lastRecentValueTimestamp = reply.getPhase1Timestamp();
-                    value = reply.getPhase1Value();
                     startPaxosInstance(index+1, value); // go try to do paxos for next slot
+                    value = reply.getPhase1Value();
                     //return here??? maybe not to be able to finish current paxos
                 }
             }else{
