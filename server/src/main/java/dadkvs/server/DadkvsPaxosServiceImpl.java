@@ -98,7 +98,7 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
         int value = request.getPhase2Value();
         int requestTimestamp = request.getPhase2Timestamp();
 
-        PaxosInstance instance = paxosInstances.get(index);
+        PaxosInstance instance = paxosInstances.computeIfAbsent(index, k -> new PaxosInstance());
 
         PhaseTwoReply reply;
         if (requestTimestamp >= instance.getHighestTimestamp()) {
@@ -230,7 +230,7 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
                 return;
             }
         }
-        
+
         // Send Phase 2 messages to all acceptors
         PhaseTwoRequest phaseTwoRequest = PhaseTwoRequest.newBuilder()
             .setPhase2Config(0)
