@@ -28,6 +28,8 @@ public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServi
 		System.out.println("Receiving read request:" + request);
 
 		GenericRequest genericRequest = new GenericRequest(request, responseObserver);
+		int paxosInstanceId = server_state.getNextPaxosInstance();
+		server_state.addRequest(genericRequest,paxosInstanceId);
 
 		if(this.server_state.isFrozen()){
 
@@ -35,9 +37,7 @@ public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServi
 
 		}else{
 			if(!server_state.getFrozenRequests().isEmpty()) processFrozenRequests();
-			server_state.addRequest(genericRequest);
 
-			int paxosInstanceId = server_state.getNextPaxosInstance();
 			int value = serializeRequest(genericRequest,request.getReqid());
 	
 			runPaxos(paxosInstanceId, value);
@@ -53,15 +53,15 @@ public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServi
 
 		GenericRequest genericRequest = new GenericRequest(request, responseObserver);
 
+		int paxosInstanceId = server_state.getNextPaxosInstance();
+		server_state.addRequest(genericRequest,paxosInstanceId);
+
 		if(this.server_state.isFrozen()){
 
 			server_state.addFrozenRequest(genericRequest);
 
 		}else{
 			if(!server_state.getFrozenRequests().isEmpty()) processFrozenRequests();
-			server_state.addRequest(genericRequest);
-
-			int paxosInstanceId = server_state.getNextPaxosInstance();
 			int value = serializeRequest(genericRequest,request.getReqid());
 	
 			runPaxos(paxosInstanceId, value);
@@ -94,9 +94,10 @@ public class DadkvsMainServiceImpl extends DadkvsMainServiceGrpc.DadkvsMainServi
 		while (iterator.hasNext()) {
 			GenericRequest request = iterator.next();
 
-			server_state.addRequest(request);
-
 			int paxosInstanceId = server_state.getNextPaxosInstance();
+
+			server_state.addRequest(request, paxosInstanceId);
+
 			int value = 0;
 			if(request.getCommit_request() == null){
 				value = serializeRequest(request,request.getRead_request().getReqid());

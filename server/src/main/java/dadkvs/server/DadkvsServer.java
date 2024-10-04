@@ -52,7 +52,7 @@ public class DadkvsServer {
 		initServerStubs();
 
 		final BindableService service_impl = new DadkvsMainServiceImpl(server_state, async_paxos_stubs);
-		final BindableService console_impl = new DadkvsConsoleServiceImpl(server_state);
+		final BindableService console_impl = new DadkvsConsoleServiceImpl(server_state, async_paxos_stubs);
 		final BindableService paxos_impl = new DadkvsPaxosServiceImpl(server_state, async_paxos_stubs);
 
 		// Create a new server to listen on port.

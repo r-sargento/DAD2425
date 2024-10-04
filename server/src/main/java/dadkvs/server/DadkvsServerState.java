@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
+
+import com.google.common.collect.ConcurrentHashMultiset;
+
 import java.util.Random;
 
 import dadkvs.DadkvsMain;
@@ -20,7 +23,7 @@ public class DadkvsServerState {
     Thread main_loop_worker;
     int lastExecutedIndex;
     
-    private ArrayList<GenericRequest> requests;
+    private ConcurrentHashMap<GenericRequest, Integer> requests;
     private ArrayList<GenericRequest> frozenRequests;
 
     private ConcurrentHashMap<Integer, GenericRequest> requestMap = new ConcurrentHashMap<>();
@@ -40,7 +43,7 @@ public class DadkvsServerState {
         main_loop = new MainLoop(this);
         main_loop_worker = new Thread(main_loop);
         main_loop_worker.start();
-        requests = new ArrayList<>();
+        requests = new ConcurrentHashMap<>();
         currentPaxosInstance = new AtomicInteger(0);
         lastExecutedIndex = -1;
         frozenRequests = new ArrayList<>();
@@ -90,9 +93,9 @@ public class DadkvsServerState {
 		return isSlowMode;
     }
 
-    public synchronized void addRequest(GenericRequest request) {
+    public synchronized void addRequest(GenericRequest request, int instanceId) {
         int serializedValue = serializeRequest(request, request.getReqid());
-        requests.add(request);
+        requests.put(request,instanceId);
         requestMap.put(serializedValue, request);
 
         if (orderMap.get(serializedValue) != null){ // caso em que o paxos ja acabou
@@ -100,8 +103,8 @@ public class DadkvsServerState {
         }
     }
 
-    public synchronized ArrayList<GenericRequest> getRequests() {
-        return new ArrayList<>(requests);
+    public synchronized ConcurrentHashMap<GenericRequest,Integer> getRequests() {
+        return requests;
     }
 
     public int getNextPaxosInstance() {
@@ -123,7 +126,7 @@ public class DadkvsServerState {
                 executeCommitRequest(request.getCommit_request(), request.getCommit_responseObserver());
             }
             lastExecutedIndex +=1;
-            requests.remove(request);
+            //requests.remove(request);
         }else {
             //caso em que ainda nao recebeu o pedido do cliente
             //for debug purposes
@@ -131,6 +134,11 @@ public class DadkvsServerState {
             orderMap.put(value, index);
         }
 
+    }
+
+    public synchronized void removeRequest(int value){
+        GenericRequest request = requestMap.get(value);
+        requests.remove(request);
     }
 
     private synchronized GenericRequest findRequestByValue(int value) {

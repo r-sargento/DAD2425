@@ -104,6 +104,7 @@ public class DadkvsPaxosServiceImpl extends DadkvsPaxosServiceGrpc.DadkvsPaxosSe
         if (requestTimestamp >= instance.getHighestTimestamp()) {
             instance.setAcceptedValue(value);
             instance.setAcceptedTimestamp(requestTimestamp);
+            server_state.removeRequest(value);
             reply = PhaseTwoReply.newBuilder()
                 .setPhase2Config(config)
                 .setPhase2Index(index)
